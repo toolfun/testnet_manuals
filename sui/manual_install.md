@@ -1,11 +1,17 @@
 <p style="font-size:14px" align="right">
-<a href="https://kjnodes.com/" target="_blank">Visit our website <img src="https://user-images.githubusercontent.com/50621007/168689709-7e537ca6-b6b8-4adc-9bd0-186ea4ea4aed.png" width="30"/></a>
-<a href="https://discord.gg/EY35ZzXY" target="_blank">Join our discord <img src="https://user-images.githubusercontent.com/50621007/176236430-53b0f4de-41ff-41f7-92a1-4233890a90c8.png" width="30"/></a>
+<a href="https://t.me/kjnotes" target="_blank">Join our telegram <img src="https://user-images.githubusercontent.com/50621007/183283867-56b4d69f-bc6e-4939-b00a-72aa019d1aea.png" width="30"/></a>
+<a href="https://discord.gg/JqQNcwff2e" target="_blank">Join our discord <img src="https://user-images.githubusercontent.com/50621007/176236430-53b0f4de-41ff-41f7-92a1-4233890a90c8.png" width="30"/></a>
 <a href="https://kjnodes.com/" target="_blank">Visit our website <img src="https://user-images.githubusercontent.com/50621007/168689709-7e537ca6-b6b8-4adc-9bd0-186ea4ea4aed.png" width="30"/></a>
 </p>
 
 <p style="font-size:14px" align="right">
 <a href="https://hetzner.cloud/?ref=y8pQKS2nNy7i" target="_blank">Deploy your VPS using our referral link to get 20€ bonus <img src="https://user-images.githubusercontent.com/50621007/174612278-11716b2a-d662-487e-8085-3686278dd869.png" width="30"/></a>
+</p>
+<p style="font-size:14px" align="right">
+<a href="https://m.do.co/c/17b61545ca3a" target="_blank">Deploy your VPS using our referral link to get 100$ free bonus for 60 days <img src="https://user-images.githubusercontent.com/50621007/183284313-adf81164-6db4-4284-9ea0-bcb841936350.png" width="30"/></a>
+</p>
+<p style="font-size:14px" align="right">
+<a href="https://www.vultr.com/?ref=7418642" target="_blank">Deploy your VPS using our referral link to get 100$ free bonus <img src="https://user-images.githubusercontent.com/50621007/183284971-86057dc2-2009-4d40-a1d4-f0901637033a.png" width="30"/></a>
 </p>
 
 <p align="center">
@@ -15,71 +21,55 @@
 # Install Sui node
 To setup Sui node follow the steps below
 
-## Update packages
+## 1. Update packages
 ```
 sudo apt update && sudo apt upgrade -y
 ```
 
-## Install dependencies
+## 2. Install dependencies
 ```
-sudo apt install tzdata git ca-certificates curl build-essential libssl-dev pkg-config libclang-dev cmake jq -y --no-install-recommends
-```
-
-## Install yq
-```
-sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.23.1/yq_linux_amd64 && sudo chmod +x /usr/local/bin/yq
+sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.23.1/yq_linux_amd64 && chmod +x /usr/local/bin/yq
+sudo apt-get install jq -y
 ```
 
-## Install Rust
+## 3. Download sui binaries
 ```
-sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
-source $HOME/.cargo/env
-```
-
-## Download and build Sui binaries
-```
-sudo mkdir -p /var/sui
-cd $HOME && rm sui -rf
-git clone https://github.com/MystenLabs/sui.git && cd sui
-git remote add upstream https://github.com/MystenLabs/sui
-git fetch upstream
-git checkout --track upstream/devnet
-cargo build --release -p sui-node
-sudo mv ~/sui/target/release/sui-node /usr/local/bin/
+version=$(wget -qO- https://api.github.com/repos/SecorD0/Sui/releases/latest | jq -r ".tag_name")
+wget -qO- "https://github.com/SecorD0/Sui/releases/download/${version}/sui-linux-amd64-${version}.tar.gz" | sudo tar -C /usr/local/bin/ -xzf -
 ```
 
-## Set configuration
+## 4. Download and update configs
 ```
-wget -O /var/sui/genesis.blob https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
-sudo cp crates/sui-config/data/fullnode-template.yaml /var/sui/fullnode.yaml
-sudo yq e -i '.db-path="/var/sui/db"' /var/sui/fullnode.yaml \
-&& yq e -i '.genesis.genesis-file-location="/var/sui/genesis.blob"' /var/sui/fullnode.yaml \
-&& yq e -i '.metrics-address="0.0.0.0:9184"' /var/sui/fullnode.yaml \
-&& yq e -i '.json-rpc-address="0.0.0.0:9000"' /var/sui/fullnode.yaml
+mkdir -p $HOME/.sui
+wget -qO $HOME/.sui/fullnode.yaml https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml
+wget -qO $HOME/.sui/genesis.blob https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+yq -i ".db-path = \"$HOME/.sui/db\"" $HOME/.sui/fullnode.yaml
+yq -i '.metrics-address = "0.0.0.0:9184"' $HOME/.sui/fullnode.yaml
+yq -i '.json-rpc-address = "0.0.0.0:9000"' $HOME/.sui/fullnode.yaml
+yq -i ".genesis.genesis-file-location = \"$HOME/.sui/genesis.blob\"" $HOME/.sui/fullnode.yaml
 ```
 
-## Create and run service
+## 5. Create sui service
 ```
-echo "[Unit]
-Description=Sui Node
-After=network.target
+sudo tee /etc/systemd/system/suid.service > /dev/null <<EOF
+[Unit]
+Description=Sui node
+After=network-online.target
 
 [Service]
 User=$USER
-Type=simple
-ExecStart=/usr/local/bin/sui-node --config-path /var/sui/fullnode.yaml
+ExecStart=$(which sui-node) --config-path $HOME/.sui/fullnode.yaml
 Restart=on-failure
+RestartSec=3
 LimitNOFILE=65535
 
 [Install]
-WantedBy=multi-user.target" > $HOME/suid.service
-mv $HOME/suid.service /etc/systemd/system/
-
-sudo tee <<EOF >/dev/null /etc/systemd/journald.conf
-Storage=persistent
+WantedBy=multi-user.target
 EOF
+```
 
-sudo systemctl restart systemd-journald
+## 6. Start sui node
+```
 sudo systemctl daemon-reload
 sudo systemctl enable suid
 sudo systemctl restart suid
